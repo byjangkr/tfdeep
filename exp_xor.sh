@@ -11,12 +11,11 @@ tsLabelFile="$dnnDir/xor/test.lab" # test label file
 tsPredProbFile="$dnnDir/xor/pred.prob" # predict probability file of test data
 tsPredLabFile="$dnnDir/xor/pred.lab" # predict label file of test data
 
-#dnn_base/trainDNN.py --feat-dim 2 --num-class 2 \
-#			--num-epoch 5000 --minibatch 5 \
-#			--last-layer hid2 \
-#			$trDataFile $trLabelFile exp/xor/1 
+mkdir -p exp/xor/1
+dnn_base/trainDNN_ex.py  --num-class 2 --lr 0.001 --num-epoch 10 --minibatch 10 --valEpoch 1 \
+			$trDataFile $trLabelFile exp/xor/1 
 
-dnn_base/predDNN.py --out-predprob $tsPredProbFile --out-predlab $tsPredLabFile \
+dnn_base/predDNN_ex.py --out-predprob $tsPredProbFile --out-predlab $tsPredLabFile \
 			$tsDataFile $tsLabelFile exp/xor/1
 
 #dnn_base/trainDNN.py --feat-dim 2 --num-class 2 \
