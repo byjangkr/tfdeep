@@ -60,8 +60,8 @@ if o.checkpoint > 0 :
 else :
   checkpoint = tf.train.latest_checkpoint(mdldir)
 
-saver.restore(sess, checkpoint)
-print 'LOG : checkpoint -> %s ' %(checkpoint)
+  saver.restore(sess, checkpoint)
+  print 'LOG : checkpoint -> %s ' %(checkpoint)
 
 x = graph.get_tensor_by_name("x:0")
 lab_y = graph.get_tensor_by_name("lab_y:0")

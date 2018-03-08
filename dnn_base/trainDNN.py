@@ -76,11 +76,11 @@ valRate = o.valRate # validation data rate (valRate %)
 
 
 hidNode_map = {
-  'hid1':100,
-  'hid2':100,
-  'hid3':100,
-  'hid4':50,
-  'hid5':10
+  'hid1':1024,
+  'hid2':1024,
+  'hid3':1024,
+  'hid4':512,
+  'hid5':128
 }
 hidNode1 = hidNode_map['hid1']
 hidNode2 = hidNode_map['hid2']
