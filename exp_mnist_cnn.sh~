@@ -1,0 +1,20 @@
+#!/bin/bash
+
+export LD_LIBRARY_PATH=/usr/local/cuDNN/lib64:/usr/local/cuda/lib64
+
+curdir=`pwd`
+dataDir=$curdir/sample_data/mnist/ # DNN directory
+
+
+mkdir -p exp/mnist/1
+#cnn/trainCNN.py  --num-class 10 --lr 0.001 --num-epoch 10 --minibatch 100 --valEpoch 1 \
+#			$dataDir $dataDir exp/mnist/1 
+
+cnn/predCNN.py $dataDir $dataDir exp/mnist/1
+
+#dnn_base/trainDNN.py --feat-dim 2 --num-class 2 \
+#			--num-epoch 100 --minibatch 5 \
+#			--mdl-dir exp/xor/1 \
+#			$trDataFile $trLabelFile exp/xor/2
+
+#dnn_base/predDNN.py $tsDataFile $tsLabelFile exp/xor/2 $tsPredFile
