@@ -1,10 +1,17 @@
 #!/usr/bin/env python
 
+# Title : trainDNN_ex.py
+# Autor : Byeong-Yong Jang
+# Data : 2018.04.02
+# E-mail : darkbulls44@gmail.com
+# Github : https://github.com/byjangkr
+# Copyright (c) 2018. All rights reserved.
+
 import tensorflow as tf
 import numpy 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))))
 from common import common_io as myio
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 

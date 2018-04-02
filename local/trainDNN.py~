@@ -76,11 +76,11 @@ valRate = o.valRate # validation data rate (valRate %)
 
 
 hidNode_map = {
-  'hid1':100,
-  'hid2':100,
-  'hid3':100,
-  'hid4':50,
-  'hid5':10
+  'hid1':1024,
+  'hid2':1024,
+  'hid3':1024,
+  'hid4':512,
+  'hid5':128
 }
 hidNode1 = hidNode_map['hid1']
 hidNode2 = hidNode_map['hid2']
@@ -181,8 +181,9 @@ print 'LOG : train data size = %d, # of iterations = %d' %(trData.shape[0],total
 print 'LOG : validation data size is %d (%d%%) of %d training data' %(valInx,valRate,(oriTrData.shape[0]+1))
 
 
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
-sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
+#gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
+#sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
+sess = tf.InteractiveSession()
 
 # make model #
 x = tf.placeholder("float", [None, o.inDim], name="x")

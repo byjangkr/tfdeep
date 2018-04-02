@@ -4,9 +4,8 @@ import tensorflow as tf
 import numpy 
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))))
 from common import common_io as myio
-from sample_data.mnist import input_data
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 ###
@@ -69,12 +68,25 @@ if len(args) != 3 :
 #(trDataFile, trLabelFile, tsDataFile, tsLabelFile) = map(int,args);
 (trDataFile, trLabelFile, expdir) = args
 
-save_path = expdir + "/cnnmdl"
+save_path = expdir + "/dnnmdl"
 miniBatch = o.mBatch
 nEpoch = o.numEpoch
 lr = o.lr
 valRate = o.valRate # validation data rate (valRate %) 
 
+
+hidNode_map = {
+  'hid1':100,
+  'hid2':100,
+  'hid3':100,
+  'hid4':50,
+  'hid5':10
+}
+hidNode1 = hidNode_map['hid1']
+hidNode2 = hidNode_map['hid2']
+hidNode3 = hidNode_map['hid3']
+hidNode4 = hidNode_map['hid4']
+hidNode5 = hidNode_map['hid5']
 
 ### End parse options 
 
@@ -94,16 +106,6 @@ def bias_variable(shape,name=""):
     return tf.Variable(initial)
   else:
     return tf.Variable(initial, name=name)
-
-def conv2d(x_img,W):
-  return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
-
-def max_pool_2x2(x):
-  return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-
-def build_cnn_weight(rows,cols,num_pre_filter,num_cur_filter,name=""):
-  return tf.Variable(tf.random_normal([rows, cols, num_pre_filter, num_cur_filter], stddev=0.01))
-
 
 def build_layer(pre_node,cur_node,pre_layer,act_func='relu'):
   W = weight_variable([pre_node, cur_node])
@@ -129,25 +131,39 @@ def trainShuff(trainData,trainLabel):
 
     return RanTrainData,RanTrainLabel
 
+def next_batch(pre_index, batch_size, data_size):
+  """Return the next `batch_size` examples from this data set."""
+# Usage
+#pre_index = 0
+#for i in range(100000):
+#  beg_index, end_index = next_batch(pre_index, miniBatch, len(trData))
+#  pre_index = end_index
+#  feed_dict = {x: trData[beg_index:end_index], y_: trLabel[beg_index:end_index]}
+  #print(beg_index,end_index)
+#  sess.run(train_step, feed_dict)
+
+  start = pre_index
+  check_index = start + batch_size
+  if  check_index > data_size:
+    # Start next epoch
+    start = 0
+
+  end = start + batch_size
+  return start, end
 ### End define function ###
 
 
 ### Read file of train data and label
 
-mnist = input_data.read_data_sets(trDiataFile, one_hot=True)
-num_data = mnist.train.num_examples
-data = mnist.train.next_batch(num_data)
-oriTrData = data[0]
-o.inDim = oriTrData.shape[1]
-oriTrLabel = data[1]
-o.numClass = oriTrLabel.shape[1]
+oriTrData, o.inDim = myio.read_data_file(trDataFile,o.inDim)
+oriTrLabel_tmp = myio.read_label_file(trLabelFile)
+oriTrLabel = myio.dense_to_one_hot(oriTrLabel_tmp,o.numClass)
 
 oriTrData, oriTrLabel=trainShuff(oriTrData, oriTrLabel) # shuffling
 
 valInx = oriTrData.shape[0]/100*valRate
 valData = oriTrData[0:valInx]
 valLabel = oriTrLabel[0:valInx]
-
 
 trData = oriTrData[valInx+1:oriTrData.shape[0]]
 trLabel = oriTrLabel[valInx+1:oriTrLabel.shape[0]]
@@ -173,26 +189,24 @@ x = tf.placeholder("float", [None, o.inDim], name="x")
 lab_y = tf.placeholder("float", [None, o.numClass], name="lab_y")
 keepProb = tf.placeholder("float", name="keepProb")
 
-x_img = tf.reshape(x, [-1,28,28,1])
+[W1, b1, h1] = build_layer(o.inDim, hidNode1, x, 'relu') 
+h1Drop = tf.nn.dropout(h1, keepProb)
 
-conv1 = tf.layers.conv2d(inputs=x_img, filters=32, kernel_size=[3,3], padding="SAME", activation=tf.nn.relu)
-pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2,2], padding="SAME", strides=2)
-dropout1 = tf.nn.dropout(pool1, keepProb)
+[W2, b2, h2] = build_layer(hidNode1, hidNode2, h1Drop, 'relu') 
+h2Drop = tf.nn.dropout(h2, keepProb)
 
-conv2 = tf.layers.conv2d(inputs=dropout1, filters=64, kernel_size=[3,3], padding="SAME", activation=tf.nn.relu)
-pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2,2], padding="SAME", strides=2)
-dropout2 = tf.nn.dropout(pool2, keepProb)
+[W3, b3, h3] = build_layer(hidNode2, hidNode3, h2Drop, 'relu') 
+h3Drop = tf.nn.dropout(h3, keepProb)
 
-flat_size = (dropout2.shape[1] * dropout2.shape[2] * dropout2.shape[3])
-flat_size = numpy.array(flat_size, dtype='int32')
-dropout2_flat = tf.reshape(dropout2,[-1, flat_size])
+[W4, b4, h4] = build_layer(hidNode3, hidNode4, h3Drop, 'relu') 
+h4Drop = tf.nn.dropout(h4, keepProb)
 
-[W_fc1, b_fc1, fc1] = build_layer(flat_size, 1024, dropout2_flat, 'relu')
-fc1Drop = tf.nn.dropout(fc1, keepProb)
+[W5, b5, h5] = build_layer(hidNode4, hidNode5, h4Drop, 'relu')
+h5Drop = tf.nn.dropout(h5, keepProb)
 
-W_last = weight_variable([1024, o.numClass],"W_last")
+W_last = weight_variable([hidNode5, o.numClass],"W_last")
 b_last = bias_variable([o.numClass],"b_last")
-out_y = tf.add(tf.matmul(fc1Drop,W_last,name="mm_last"),b_last,name="out_y")
+out_y = tf.add(tf.matmul(h5Drop,W_last,name="mm_last"),b_last,name="out_y")
 
 cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=out_y,labels=lab_y),name="ce")
 train_step = tf.train.AdamOptimizer(lr).minimize(cross_entropy)
@@ -244,7 +258,6 @@ while(epoch<nEpoch):
 
 saver.save(sess, save_path, global_step=epoch,write_meta_graph=False) # last model save
 print "### done \n"
-
 
 
 
