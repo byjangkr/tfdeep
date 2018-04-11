@@ -77,6 +77,7 @@ def log_spec_scipy(wavfile,frame_size=400,frame_shift=160):
     return sample_freq, segment_time, log_spec_data
 
 
+# compute log-spectrogram using 'librosa'
 def log_spec_librosa(wavfile,frame_size=400,frame_shift=160):
     data, fs = librosa.load(wavfile,sr=None)
     spec_data = librosa.core.stft(data,n_fft=512,hop_length=frame_shift,win_length=frame_size,
@@ -84,8 +85,8 @@ def log_spec_librosa(wavfile,frame_size=400,frame_shift=160):
     log_spec_data = np.log(np.abs(np.conj(spec_data)*spec_data*2) + log_offset)
     return np.array(log_spec_data)
 
-# compute log-spectrogram using 'librosa'
-def mel_ceps_spec_librosa(wavfile,frame_size=400,frame_shift=160):
+
+def mel_spec_librosa(wavfile,frame_size=400,frame_shift=160):
     data, fs = librosa.load(wavfile,sr=None)
     spec_data = librosa.core.stft(data,n_fft=512,hop_length=frame_shift,win_length=frame_size,
                                   window='hann',center=False)
@@ -117,7 +118,7 @@ def main():
         # _, _, log_spec_scipy_data = log_spec_scipy(wav_path)
 
         log_spec_librosa_data = log_spec_librosa(wav_path)
-        mel_spec_librosa_data = mel_ceps_spec_librosa(wav_path)
+        mel_spec_librosa_data = mel_spec_librosa(wav_path)
         chroma_spec_librosa_data = chroma_spec_librosa(wav_path)
 
         # data_ary.append(wanted_data)
