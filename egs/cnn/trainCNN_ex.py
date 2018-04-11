@@ -172,7 +172,7 @@ print 'LOG : train data size = %d, # of iterations = %d' %(trData.shape[0],total
 print 'LOG : validation data size is %d (%d%%) of %d training data' %(valInx,valRate,(oriTrData.shape[0]+1))
 
 
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
 sess = tf.InteractiveSession(config=tf.ConfigProto(gpu_options=gpu_options))
 
 # make model #
