@@ -3,6 +3,18 @@
     byjang@cbnu.ac.kr
     This code is for extracting spectrogram from wav-file.
 
+    Usage in sh
+    -----------
+    python extract_spec.py --spec-type=scispec --sample-frequency=16000 \
+                           --frame-length=25 --frame-shift=10 --fft-size=512 \
+                           --plot-spec=True \
+                           test.wav  test.bin
+
+   Usage in python
+   ---------------
+   import extract_spec as exspec
+   spec_data = exspec.run('test.wav','test.bin','scispec',16000,25,10,512)
+
 
     Input
     -----
@@ -65,7 +77,7 @@ def log_spec_tensorflow(wavfile, _sr, frame_size, frame_shift):
     wav_decoder = contrib_audio.decode_wav(wav_loader, desired_channels=1)
     wav_data = wav_decoder.audio
 
-    wav_sample_rate = sess.run(wav_decoder, eed_dict={wav_filename_placeholder: wavfile}).sample_rate
+    wav_sample_rate = sess.run(wav_decoder, feed_dict={wav_filename_placeholder: wavfile}).sample_rate
     check_sample_rate(wavfile, _sr, wav_sample_rate)
 
     spectrogram = contrib_audio.audio_spectrogram(
@@ -90,7 +102,7 @@ def mfcc_tensorflow(wavfile, _sr, frame_size, frame_shift, order=13):
     wav_decoder = contrib_audio.decode_wav(wav_loader, desired_channels=1)
     wav_data = wav_decoder.audio
 
-    wav_sample_rate = sess.run(wav_decoder, eed_dict={wav_filename_placeholder: wavfile}).sample_rate
+    wav_sample_rate = sess.run(wav_decoder, feed_dict={wav_filename_placeholder: wavfile}).sample_rate
     check_sample_rate(wavfile, _sr, wav_sample_rate)
 
     spectrogram = contrib_audio.audio_spectrogram(
@@ -113,8 +125,14 @@ def log_spec_scipy(wavfile, _sr, frame_size, frame_shift, fft_size):
     # if nfft is 'None', fft size is 'nperseg'
     sample_freq, segment_time, spec_data = scipy.signal.spectrogram(data, fs=sample_rate,
                                                                     window='hann', nperseg=frame_size,
-                                                                    noverlap=(frame_size - frame_shift), nfft=fft_size,
+                                                                    noverlap=(frame_size - frame_shift),
+                                                                    nfft=fft_size,
+                                                                    scaling='spectrum',
+                                                                    detrend=False,
                                                                     mode='psd')
+    # if mode='magnitude', then the option of stft is follow as :
+    # _, t, S = scipy.signal.stft(data,fs=sample_rate,nperseg=frame_size_,noverlap=(frame_size_-frame_shift_),
+    #                             nfft=fft_size_,padded=False,boundary=None)
     # mode = {psd, complex, magnitude, angle, phase}
     log_spec_data = np.log(spec_data + log_offset)
     return sample_freq, segment_time, log_spec_data
@@ -149,6 +167,44 @@ def chroma_spec_librosa(wavfile, _sr, frame_size, frame_shift, fft_size):
                                   window='hann', center=False)
     chroma_data = librosa.feature.chroma_stft(sr=fs,S=spec_data,n_fft=512)
     return np.transpose(chroma_data)
+
+def plot_spec(spec_data):
+    plt.figure()
+    plt.pcolormesh(spec_data)
+    plt.title('Log spectrogram')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [sec]')
+
+    plt.show()
+
+def run(wavfile_,outfile_,spec_type_='scispec',sample_rate_=16000,frame_size_=25,frame_shift_=10,fft_size_=512):
+
+    wav_path = wavfile_
+    out_file = outfile_
+
+    spec_type = spec_type_
+    sr_ = sample_rate_
+    frame_size_ = np.int(frame_size_ * sr_ * 0.001)
+    frame_shift_ = np.int(frame_shift_ * sr_ * 0.001)
+    fft_size = fft_size_
+
+    if spec_type == 'tfspec':
+        spec_data = log_spec_tensorflow(wav_path,sr_,frame_size_,frame_shift_)
+    elif spec_type == 'tfmfcc':
+        spec_data = mfcc_tensorflow(wav_path,sr_,frame_size_,frame_shift_,order=13)
+    elif spec_type == 'scispec':
+        _, _, spec_data = log_spec_scipy(wav_path,sr_,frame_size_,frame_shift_,fft_size_)
+    elif spec_type == 'rosaspec':
+        spec_data = log_spec_librosa(wav_path,sr_,frame_size_,frame_shift_,fft_size_)
+    elif spec_type == 'rosamelspec':
+        spec_data = mel_spec_librosa(wav_path,sr_,frame_size_,frame_shift_,fft_size_)
+    elif spec_type == 'rosachroma':
+        spec_data = chroma_spec_librosa(wav_path,sr_,frame_size_,frame_shift_,fft_size_)
+    else:
+        _, _, spec_data = log_spec_scipy(wav_path,sr_,frame_size_,frame_shift_,fft_size_)
+
+    return spec_data
+
 
 def main():
 
@@ -199,7 +255,7 @@ def main():
     if o.plot_spec == 'True':
         plt.figure()
         plt.pcolormesh(spec_data)
-        plt.title('Log spectrogram (direct) of tensorflow')
+        plt.title('Log spectrogram')
         plt.ylabel('Frequency [Hz]')
         plt.xlabel('Time [sec]')
 
