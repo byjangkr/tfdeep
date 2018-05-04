@@ -32,38 +32,6 @@ from common.bnf import *
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 ### Define function ###
-def weight_variable(shape,name=""):
-  initializer = tf.contrib.layers.xavier_initializer()
-  if name == "":
-    return tf.Variable(initializer(shape))
-  else:
-    return tf.Variable(initializer(shape),name=name)
-
-
-def bias_variable(shape,name=""):
-  initial = tf.random_normal(shape)
-  if name == "":
-    return tf.Variable(initial)
-  else:
-    return tf.Variable(initial, name=name)
-
-def conv2d(x_img,W):
-  return tf.nn.conv2d(x_img, W, strides=[1, 1, 1, 1], padding='SAME')
-
-def build_layer(pre_node,cur_node,pre_layer,act_func):
-  W = weight_variable([pre_node, cur_node])
-  b = bias_variable([cur_node])
-  if act_func == 'sigmoid':
-    h = tf.nn.sigmoid(tf.matmul(pre_layer,W) + b)
-  elif act_func == 'relu':
-    h = tf.nn.relu(tf.matmul(pre_layer,W) + b)
-  elif act_func == 'tanh':
-    h = tf.nn.tanh(tf.matmul(pre_layer,W) + b)
-  else:
-    h = tf.sigmoid(tf.matmul(pre_layer,W) + b)
-
-  return W,b,h
-
 def trainShuff(trainData,trainLabel):
     
     length=trainData.shape[0]
@@ -76,25 +44,6 @@ def trainShuff(trainData,trainLabel):
 
     return RanTrainData,RanTrainLabel
 
-def next_batch(pre_index, batch_size, data_size):
-  """Return the next `batch_size` examples from this data set."""
-# Usage
-#pre_index = 0
-#for i in range(100000):
-#  beg_index, end_index = next_batch(pre_index, miniBatch, len(trData))
-#  pre_index = end_index
-#  feed_dict = {x: trData[beg_index:end_index], y_: trLabel[beg_index:end_index]}
-  #print(beg_index,end_index)
-#  sess.run(train_step, feed_dict)
-
-  start = pre_index
-  check_index = start + batch_size
-  if  check_index > data_size:
-    # Start next epoch
-    start = 0
-
-  end = start + batch_size
-  return start, end
 
 def load_spec_vad_data_set(filename,splice_size,spec_stride,class_dict):
     spec_data_set = []
@@ -162,6 +111,28 @@ def batch_from_scp(scplist,splice_size,spec_stride,class_dict):
 
     return numpy.array(dataset), numpy.array(labelset)
 
+def compute_info(filename, splice_size, spec_stride):
+    with open(filename) as f:
+        infolist = f.readlines()
+
+    data_cnt = 0
+    for info in infolist:
+        info_str = "".join(info).strip()
+        time_info = int(info_str.split()[3])
+        check_info = int(info_str.split()[6])
+
+        if not time_info == check_info: # spec_time_size == vad_size
+            print "Warning(compute_info) : wrong info-file -> %s" %(filename)
+            return int(-1)
+
+        begi = 0
+        endi = begi + splice_size * 2 + 1
+        while endi < time_info:
+            data_cnt += 1
+            begi = begi + spec_stride
+            endi = begi + splice_size * 2 + 1
+
+    return int(data_cnt)
 
 ### End define function ###
 
@@ -206,15 +177,15 @@ def main():
     parser.add_option('--mdl-dir', dest='premdl',
                       help='Directory path of pre-model for training',
                       default='', type='string')
+    parser.add_option('--info-file', dest='info_file',
+                      help='Information file of data',
+                      default='', type='string')
     parser.add_option('--active-function', dest='act_func',
                       help='active function relu or sigmoid [default: %default]',
                       default='relu', type='string')
 
     (o, args) = parser.parse_args()
     (scpfile, classfile, expdir, logfile) = args
-
-    print "Developing CNN script############"
-
 
     ## set the log 
     mylogger = logging.getLogger("trainDNN")
@@ -254,13 +225,11 @@ def main():
     splice_size = o.splice_size
     spec_stride = o.spec_stride # the smaller value, the larger the number of spectrograms extracted from a wavfile
     keep_prob = o.keep_prob
+    info_file = o.info_file
 
-    # filt_1 = [32, 5, 2]  # configuration for conv1 in [num_filt,kern_size,pool_stride]
-    # filt_2 = [20, 5, 2]
-    # num_fc_1 = 1024
+    ### End parse options
 
-    ### End parse options 
-    
+
     ### Read file of train data and label
     # create dict using 'class-dict-file' for converting label(string) to label(int)
     class_dict = {}
@@ -280,11 +249,9 @@ def main():
     with open(scpfile) as f:
         scplist = f.readlines()
 
-    # warning !!! need to fix using data information (number of frame)
-    # current code is approximate
-    mylogger.info("Read validation data")
+    # current code is approximate, but it's okay because we limited the file size
+    mylogger.info("State: read validation data")
     val_inx = int(len(scplist)/100.0*val_rate)
-    # val_inx = 5
     val_scp = scplist[0:val_inx]
 
     val_data, val_lab = batch_from_scp(val_scp,splice_size,spec_stride,class_dict)
@@ -295,6 +262,18 @@ def main():
 
     tr_scp = scplist[val_inx:len(scplist)]
 
+    data_size = -1
+    if not info_file == '':
+        data_size = compute_info(info_file, splice_size, spec_stride)
+
+    if not data_size == -1:
+        tr_data_size = int(data_size - val_data.shape[0])
+        niter = int(tr_data_size / mini_batch)
+        tr_size_str = "%d"%(tr_data_size)
+        niter_str = "%d"%(niter)
+    else:
+        tr_size_str = "??"
+        niter_str = "??"
 
     ### Main script ###
     mylogger.info('######### Configuration of CNN-model #########')
@@ -302,9 +281,8 @@ def main():
     # mylogger.info('# Layer size = %d layer, active function: %s',len(hidNode_map), o.actFunc)
     mylogger.info('# Mini-batch size = %d, # of epoch = %d' %(mini_batch,nepoch))
     mylogger.info('# Learning rate = %f, probability of keeping in dropout = %0.1f' %(lr,keep_prob))
-    mylogger.info('LOG : train data size = ??, # of iterations = ??')
+    mylogger.info('LOG : train data size = %s, # of iterations = %s'%(tr_size_str,niter_str))
     mylogger.info('LOG : validation data size is %d' % (val_data.shape[0]))
-    # mylogger.info('LOG : validation data size is %d (%d%%) of %d training data' %(val_inx,valRate,(oriTrData.shape[0]+1)))
 
     # with tf.device('/gpu:0'):
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.9)
@@ -312,7 +290,6 @@ def main():
     #sess = tf.InteractiveSession()
 
     # make model #
-    # x = tf.placeholder("float", [None, o.inDim], name="x")
     x = tf.placeholder("float",[None,fdim,tdim], name='x')
     lab_y = tf.placeholder("float", [None, nclasses], name="lab_y")
     keepProb = tf.placeholder("float", name="keepProb")
@@ -323,69 +300,43 @@ def main():
         x_img = tf.reshape(x, [-1,fdim,tdim,1])
 
     with tf.name_scope("Conv1_maxpool_dropout") as scope:
-        # W_conv1 = weight_variable([filt_1[1], 1, 1, filt_1[0]], 'Conv_layer_1')
-        # b_conv1 = bias_variable([filt_1[0]], 'bias_for_Conv_layer_1')
-        # a_conv1 = conv2d(x, W_conv1) + b_conv1
-        # h_conv1 = tf.nn.relu(a_conv1)
-        conv1 = tf.layers.conv2d(inputs=x_img, filters=32, kernel_size=[3, 3],
+        conv1 = tf.layers.conv2d(inputs=x_img, filters=32, kernel_size=[5, 5],
                                  padding="SAME", activation=tf.nn.relu)
         pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2,2],
                                         padding="SAME", strides=2)
         dropout1 = tf.layers.dropout(inputs=pool1, rate=keepProb, training=bool_dropout)
 
-    # with tf.name_scope('max_pool1') as scope:
-    # h_pool1 = tf.nn.max_pool(h_conv1, ksize=[1, filt_1[2], 1, 1],
-    #         strides=[1, filt_1[2], 1, 1], padding='VALID')
-    # width_pool1 = int(numpy.floor((o.inDim-filt_1[2])/filt_1[2]))+1
-    # size1 = tf.shape(h_pool1)
-
-
     with tf.name_scope("Conv2_maxpool_dropout") as scope:
-        # W_conv2 = weight_variable([filt_2[1], 1, filt_1[0], filt_2[0]], 'Conv_layer_2')
-        # b_conv2 = bias_variable([filt_2[0]], 'bias_for_Conv_layer_2')
-        # a_conv2 = conv2d(h_pool1, W_conv2) + b_conv2
-        # h_conv2 = a_conv2 # ReLu after batchnorm
-        # # h_conv2 = tf.nn.relu(a_conv2)
         conv2 = tf.layers.conv2d(inputs=dropout1, filters=64, kernel_size=[3, 3],
                                  padding="SAME", activation=tf.nn.relu)
         pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2,2],
                                         padding="SAME", strides=2)
         dropout2 = tf.layers.dropout(inputs=pool2, rate=keepProb, training=bool_dropout)
 
-    # with tf.name_scope('max_pool2') as scope:
-    # h_pool2 = tf.nn.max_pool(h_conv2, ksize=[1, filt_2[2], 1, 1],
-    #         strides=[1, filt_2[2], 1, 1], padding='VALID')
-    # width_pool2 = int(numpy.floor((width_pool1-filt_2[2])/filt_2[2]))+1
-    # size2 = tf.shape(h_pool2)
-
-
-    # with tf.name_scope('Batch_norm1') as scope:
-    #   a_bn1 = batch_norm(h_pool2,filt_2[0],bn_train,'bn2')
-    #   h_bn1 = tf.nn.relu(a_bn1)
+    with tf.name_scope("Conv3_maxpool_dropout") as scope:
+        conv3 = tf.layers.conv2d(inputs=dropout2, filters=128, kernel_size=[3, 3],
+                                 padding="SAME", activation=tf.nn.relu)
+        pool3 = tf.layers.max_pooling2d(inputs=conv3, pool_size=[2, 2],
+                                        padding="SAME", strides=2)
+        dropout3 = tf.layers.dropout(inputs=pool3, rate=keepProb, training=bool_dropout)
 
     with tf.name_scope("Fully_Connected1") as scope:
-        flat = tf.reshape(dropout2, [-1, 64*65*6])
-        fc1 = tf.layers.dense(inputs=flat, units=2048, activation=tf.nn.relu)
-        dropout3 = tf.layers.dropout(inputs=fc1, rate=keepProb, training=bool_dropout)
-        # W_fc1 = weight_variable([width_pool2*filt_2[0], num_fc_1],'Fully_Connected_layer_1')
-        # b_fc1 = bias_variable([num_fc_1], 'bias_for_Fully_Connected_layer_1')
-        # h_flat = tf.reshape(h_bn1, [-1, width_pool2*filt_2[0]])
-        # h_flat = tf.nn.dropout(h_flat,keepProb)
-        # h_fc1 = tf.nn.relu(tf.matmul(h_flat, W_fc1) + b_fc1)
+        flat = tf.reshape(dropout3, [-1, 128*33*3])
+        fc1 = tf.layers.dense(inputs=flat, units=2048, activation=tf.nn.relu,
+                              kernel_initializer=tf.contrib.layers.xavier_initializer())
+        dropout4 = tf.layers.dropout(inputs=fc1, rate=keepProb, training=bool_dropout)
+
+    with tf.name_scope("Fully_Connected2") as scope:
+        fc2 = tf.layers.dense(inputs=dropout4, units=1048, activation=tf.nn.relu,
+                              kernel_initializer=tf.contrib.layers.xavier_initializer())
+        dropout5 = tf.layers.dropout(inputs=fc2, rate=keepProb, training=bool_dropout)
 
     with tf.name_scope("Output_layer") as scope:
-        out_y = tf.layers.dense(inputs=dropout3, units=nclasses, name="out_y")
-        # h_fc1_drop = tf.nn.dropout(h_fc1, keepProb)
-        # W_fc2 = weight_variable([num_fc_1, o.numClass],'W_fc2')
-        # b_fc2 = bias_variable([o.numClass], 'b_fc2')
-        # out_y = tf.add(tf.matmul(h_fc1_drop, W_fc2),b_fc2,name="out_y")
-        # size3 = tf.shape(out_y)
+        out_y = tf.layers.dense(inputs=dropout5, units=nclasses, name="out_y")
 
 
     with tf.name_scope("SoftMax") as scope:
         cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=out_y,labels=lab_y),name="ce")
-
-        #loss_summ = tf.scalar_summary("cross entropy_loss", cost)
 
     train_step = tf.train.AdamOptimizer(lr).minimize(cross_entropy)
 
@@ -430,7 +381,8 @@ def main():
             sess.run(train_step, feed_dict)
             iter = iter + 1
 
-            if (iter%val_iter==0) | (iter==1): # print state of training for validation data and mini-batch
+            # print state of training for validation data and mini-batch
+            if (iter % val_iter == 0) | (iter == 1):
                 val_acc = []
                 val_ce = []
                 for i in range(int(val_data.shape[0]/mini_batch+1)):
@@ -457,9 +409,9 @@ def main():
                 file_handler.setFormatter(formatter)
                 mylogger.addHandler(file_handler)
                 mylogger.info('%d epoch, %d iter (tr/va ce acc) | %f %2.1f%% %f %2.1f%%'
-                              %(epoch, iter,tr_ce, (tr_acc*100), val_ce,(val_acc*100)))
+                              % (epoch, iter,tr_ce, (tr_acc*100), val_ce,(val_acc*100)))
 
-                if (iter%save_iter==0) | (iter==1): # save parameter
+                if (iter%save_iter == 0) | (iter == 1): # save parameter
                     saver.save(sess, save_path, global_step=iter, write_meta_graph=False)
 
 

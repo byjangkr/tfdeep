@@ -32,6 +32,8 @@
     --vad-medfilter-size (int) : median filter size for VAD [default: 5 frame]
 
     --target-label (string) : target label [default: None]
+    --save-length (int) : maximum length to save (sec) [default: wav length]
+    --save-info (string) : save information file [optional]
 
 """
 
